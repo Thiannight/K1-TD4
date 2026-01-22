@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/src/main/java/repository/DataRetriever.java" value="319fcc88-b0ad-403a-b03c-c059ea70f8dd" />
     <file url="file://$PROJECT_DIR$/src/main/resources/sql/data.sql" value="319fcc88-b0ad-403a-b03c-c059ea70f8dd" />
     <file url="file://$PROJECT_DIR$/src/main/resources/sql/db.sql" value="319fcc88-b0ad-403a-b03c-c059ea70f8dd" />
+    <file url="file://$PROJECT_DIR$/src/main/resources/sql/schema.sql" value="319fcc88-b0ad-403a-b03c-c059ea70f8dd" />
   </component>
 </project>
