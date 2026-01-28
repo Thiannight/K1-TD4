@@ -12,7 +12,6 @@ import java.util.UUID;
 public class DataRetriever {
     private final StockService stockService = new StockService();
 
-    // Inside DataRetriever.java
     public List<DishIngredient> findDishIngredients(int dishId) {
         List<DishIngredient> ingredients = new ArrayList<>();
         String sql = "SELECT di.id, di.quantity_required, di.unit, i.id as ing_id, i.name, i.price " +
@@ -45,6 +44,29 @@ public class DataRetriever {
         }
         return ingredients;
     }
+
+    public Dish saveDish(Dish d) {
+        String sql = "INSERT INTO dish (name, dish_type, price) VALUES (?, ?::dish_type, ?) RETURNING id";
+
+        try (Connection conn = DatabaseConnection.getDBConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, d.getName());
+            stmt.setString(2, d.getDishType() != null ? d.getDishType().name() : "MAIN");
+            stmt.setDouble(3, d.getPrice());
+
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                d.setId(rs.getInt(1)); // récupère l'ID généré par la DB
+            }
+
+            return d;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la sauvegarde du plat: " + d.getName(), e);
+        }
+    }
+
 
     public Ingredient saveIngredient(Ingredient toSave) {
         String sql = """

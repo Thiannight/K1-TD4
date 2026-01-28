@@ -1,5 +1,6 @@
 import Model.Dish;
 import Model.DishOrder;
+import Model.DishTypeEnum;
 import Model.Order;
 import repository.DataRetriever;
 
@@ -12,6 +13,9 @@ public class Main {
         Dish pizza = new Dish();
         pizza.setName("Margherita");
         pizza.setPrice(12.0);
+        pizza.setDishType(DishTypeEnum.MAIN);
+
+        pizza = dr.saveDish(pizza);
 
         Order newOrder = new Order();
         newOrder.setReference("ORD00001");
@@ -23,6 +27,7 @@ public class Main {
         newOrder.getDishOrders().add(item);
 
         dr.saveOrder(newOrder);
+
         System.out.println("Order saved! Total TTC: " + newOrder.getTotalAmountWithVAT());
     }
 }
