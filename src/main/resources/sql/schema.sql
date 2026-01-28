@@ -9,6 +9,7 @@ DROP TYPE IF EXISTS dish_type CASCADE;
 
 CREATE TYPE category_type AS ENUM ('VEGETABLE', 'ANIMAL', 'MARINE', 'DAIRY', 'OTHER');
 CREATE TYPE dish_type AS ENUM ('START', 'MAIN', 'DESSERT');
+create TYPE movement_type AS ENUM ('IN', 'OUT');
 
 CREATE TABLE ingredient (
     id SERIAL PRIMARY KEY,
@@ -47,10 +48,10 @@ CREATE TABLE dish_order (
 );
 
 CREATE TABLE stock_movement (
-    id UUID PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     id_ingredient INTEGER REFERENCES ingredient(id) ON DELETE CASCADE,
     quantity DECIMAL(10, 3) NOT NULL,
     unit VARCHAR(20) NOT NULL DEFAULT 'KG',
-    type VARCHAR(10) NOT NULL, -- 'IN' or 'OUT'
+    type movement_type NOT NULL,
     creation_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

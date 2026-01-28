@@ -47,10 +47,14 @@ public class DataRetriever {
     }
 
     public Ingredient saveIngredient(Ingredient toSave) {
-        String sql = "INSERT INTO ingredient (name, price, category) VALUES (?, ?, ?) " +
-                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, " +
-                "price = EXCLUDED.price, category = EXCLUDED.category " +
-                "RETURNING id";
+        String sql = """
+                INSERT INTO ingredient (name, price, category)
+                VALUES (?, ?, ?)
+                ON CONFLICT (name) DO UPDATE
+                SET price = EXCLUDED.price,
+                    category = EXCLUDED.category
+                RETURNING id
+                """;
 
         try (Connection conn = DatabaseConnection.getDBConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -135,10 +139,11 @@ public class DataRetriever {
             List<StockMovement> movements = new ArrayList<>();
             while (rs.next()) {
                 StockMovement movement = new StockMovement(
-                        (UUID) rs.getObject("id"),
+                        rs.getInt("id"),
                         rs.getDouble("quantity"),
                         Unit.valueOf(rs.getString("unit")),
-                        rs.getTimestamp("creation_datetime").toInstant()
+                        rs.getTimestamp("creation_datetime").toInstant(),
+                        MovementTypeEnum.valueOf(rs.getString("movement_type"))
                 );
                 movements.add(movement);
             }
@@ -146,14 +151,12 @@ public class DataRetriever {
         }
     }
 
-    // Fix the saveOrder method (correct the syntax error)
     public Order saveOrder(Order orderToSave) {
         try (Connection conn = DatabaseConnection.getDBConnection()) {
             conn.setAutoCommit(false);
 
             // 1. Stock Verification
             for (DishOrder item : orderToSave.getDishOrders()) {
-                // First, load the dish with ingredients
                 Dish dish = findDishById(item.getDish().getId());
                 if (dish == null) {
                     throw new RuntimeException("Dish not found: " + item.getDish().getId());
@@ -174,7 +177,7 @@ public class DataRetriever {
                 }
             }
 
-            // 2. Save Order (fixed syntax error)
+            // 2. Save Order
             PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO \"order\" (reference, creation_datetime) VALUES (?, ?) RETURNING id"
             );
@@ -190,7 +193,6 @@ public class DataRetriever {
         }
     }
 
-    // Helper method to find dish by id
     public Dish findDishById(Integer id) {
         if (id == null) return null;
 
@@ -209,7 +211,6 @@ public class DataRetriever {
                 dish.setPrice(rs.getDouble("price"));
                 dish.setDishType(DishTypeEnum.valueOf(rs.getString("dish_type")));
 
-                // Load ingredients
                 List<DishIngredient> ingredients = findDishIngredients(dish.getId());
                 dish.setIngredients(ingredients);
 
@@ -237,7 +238,6 @@ public class DataRetriever {
             Order order = new Order();
             order.setId(rs.getInt("id"));
             order.setReference(rs.getString("reference"));
-            // Populating dishOrders would require a second join/query here
             return order;
         } catch (SQLException e) {
             throw new RuntimeException(e);

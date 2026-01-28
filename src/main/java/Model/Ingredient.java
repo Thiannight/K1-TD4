@@ -1,5 +1,6 @@
 package Model;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -9,7 +10,7 @@ public class Ingredient {
     private double price;
     private CategoryEnum category;
     private Dish dish;
-    private List<StockMovement> stockMovementList;
+    private List<StockMovement> stockMovementList = new ArrayList<>();
 
     public Ingredient(){}
 

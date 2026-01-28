@@ -3,29 +3,26 @@ import Model.DishOrder;
 import Model.Order;
 import repository.DataRetriever;
 
-void main() {
-    DataRetriever dr = new DataRetriever();
+import java.time.Instant;
 
-    // 1. Setup a Dish
-    Dish pizza = new Dish();
-    pizza.setName("Margherita");
-    pizza.setPrice(12.0);
+public class Main {
+    public static void main(String[] args) {
+        DataRetriever dr = new DataRetriever();
 
-    // 2. Prepare an Order
-    Order newOrder = new Order();
-    newOrder.setReference("ORD00001");
-    newOrder.setCreationDatetime(Instant.now());
+        Dish pizza = new Dish();
+        pizza.setName("Margherita");
+        pizza.setPrice(12.0);
 
-    DishOrder item = new DishOrder();
-    item.setDish(pizza);
-    item.setQuantity(2);
-    newOrder.getDishOrders().add(item);
+        Order newOrder = new Order();
+        newOrder.setReference("ORD00001");
+        newOrder.setCreationDatetime(Instant.now());
 
-    // 3. Save with validation
-    try {
+        DishOrder item = new DishOrder();
+        item.setDish(pizza);
+        item.setQuantity(2);
+        newOrder.getDishOrders().add(item);
+
         dr.saveOrder(newOrder);
-        IO.println("Order saved! Total TTC: " + newOrder.getTotalAmountWithVAT());
-    } catch (RuntimeException e) {
-        System.err.println("Error: " + e.getMessage());
+        System.out.println("Order saved! Total TTC: " + newOrder.getTotalAmountWithVAT());
     }
 }
