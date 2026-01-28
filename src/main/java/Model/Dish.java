@@ -1,5 +1,7 @@
 package Model;
 
+import repository.DataRetriever;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -9,13 +11,13 @@ public class Dish {
     private String name;
     private DishTypeEnum dishType;
     private Double price;
-    private List<Ingredient> ingredients;
+    private List<DishIngredient> ingredients;
 
     public Dish() {
         this.ingredients = new ArrayList<>();
     }
 
-    public Dish(int id, String name, DishTypeEnum dishType, Double price, List<Ingredient> ingredients) {
+    public Dish(int id, String name, DishTypeEnum dishType, Double price, List<DishIngredient> ingredients) {
         this.id = id;
         this.name = name;
         this.dishType = dishType;
@@ -52,14 +54,14 @@ public class Dish {
         this.price = price;
     }
 
-    public List<Ingredient> getIngredients() {
+    public List<DishIngredient> getIngredients() {
         return ingredients;
     }
-    public void setIngredients(List<Ingredient> ingredients) {
+    public void setIngredients(List<DishIngredient> ingredients) {
         this.ingredients = ingredients;
     }
 
-    public void addIngredient(Ingredient ingredient) {
+    public void addIngredient(DishIngredient ingredient) {
         if (ingredients == null) {
             ingredients = new ArrayList<>();
         }
@@ -71,7 +73,7 @@ public class Dish {
     public String toString() {
         return "Dish{id=" + id + ", name='" + name + "', dishType=" + dishType +
                 ", price=" + price + ", cost=" + getDishCost() +
-                ", margin=" + (price != null ? getCrossMargin() : "N/A") +
+                ", margin=" + (price != null ? getGrossMargin() : "N/A") +
                 ", ingredients=" + ingredients + "}";
     }
     public Double getDishCost() {
@@ -79,8 +81,15 @@ public class Dish {
             return 0.0;
         }
         return ingredients.stream()
-                .mapToDouble(Ingredient::getPrice)
+                .mapToDouble(DishIngredient::getIngredientCost)
                 .sum();
+    }
+
+    public Double getGrossMargin() {
+        if (this.price == null) {
+            throw new RuntimeException("Price not set for dish: " + this.name);
+        }
+        return this.price - getDishCost();
     }
 
     // Nouvelle méthode qui nécessite un DataRetriever pour récupérer les quantités
@@ -99,15 +108,6 @@ public class Dish {
                 .sum();
     }
 
-    public Double getCrossMargin() {
-        if (this.price == null) {
-            throw new RuntimeException("Impossible de calculer la marge : le prix de vente n'a pas été fixé pour le plat '" + this.name + "'");
-        }
-        Double cost = getDishCost();
-        return this.price - cost;
-    }
-
-    // Version avec quantités
     public Double getCrossMarginWithQuantities(DataRetriever dataRetriever) {
         if (this.price == null) {
             throw new RuntimeException("Impossible de calculer la marge : le prix de vente n'a pas été fixé pour le plat '" + this.name + "'");

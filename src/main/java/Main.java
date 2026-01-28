@@ -1,33 +1,31 @@
-import Model.Ingredient;
-import Model.Stock;
-import Model.StockMovement;
-import Model.Unit;
+import Model.Dish;
+import Model.DishOrder;
+import Model.Order;
 import repository.DataRetriever;
-import service.StockService;
 
-import java.time.Instant;
-import java.util.UUID;
+void main() {
+    DataRetriever dr = new DataRetriever();
 
-public class Main {
-    public static void main(String[] args) {
-        Ingredient rice = new Ingredient(null, "Rice");
+    // 1. Setup a Dish
+    Dish pizza = new Dish();
+    pizza.setName("Margherita");
+    pizza.setPrice(12.0);
 
-        rice.addStockMovement(
-                new StockMovement(UUID.randomUUID(), 10, Unit.KG, Instant.parse("2024-01-01T10:00:00Z"))
-        );
-        rice.addStockMovement(
-                new StockMovement(UUID.randomUUID(), -3, Unit.KG, Instant.parse("2024-01-05T10:00:00Z"))
-        );
+    // 2. Prepare an Order
+    Order newOrder = new Order();
+    newOrder.setReference("ORD00001");
+    newOrder.setCreationDatetime(Instant.now());
 
-        DataRetriever dr = new DataRetriever();
-        dr.saveIngredient(rice);
+    DishOrder item = new DishOrder();
+    item.setDish(pizza);
+    item.setQuantity(2);
+    newOrder.getDishOrders().add(item);
 
-        StockService service = new StockService();
-        Stock stock = service.getStockValueAt(
-                rice,
-                Instant.parse("2024-01-06T12:00:00Z")
-        );
-
-        System.out.println(stock.getQuantity()); // 7.0
+    // 3. Save with validation
+    try {
+        dr.saveOrder(newOrder);
+        IO.println("Order saved! Total TTC: " + newOrder.getTotalAmountWithVAT());
+    } catch (RuntimeException e) {
+        System.err.println("Error: " + e.getMessage());
     }
 }

@@ -1,5 +1,6 @@
 package Model;
 
+import java.util.List;
 import java.util.Objects;
 
 public class Ingredient {
@@ -8,6 +9,7 @@ public class Ingredient {
     private double price;
     private CategoryEnum category;
     private Dish dish;
+    private List<StockMovement> stockMovementList;
 
     public Ingredient(){}
 
@@ -49,6 +51,19 @@ public class Ingredient {
     public void setDish(Dish dish) {
         this.dish = dish;
     }
+
+    public void addStockMovement(StockMovement movement) {
+        stockMovementList.add(movement);
+    }
+
+    public List<StockMovement> getStockMovementList() {
+        return stockMovementList;
+    }
+
+    public void setStockMovementList(List<StockMovement> stockMovementList) {
+        this.stockMovementList = stockMovementList;
+    }
+
 
     public String getDishName() {
         return dish != null ? dish.getName() : "Non associé à un plat";
