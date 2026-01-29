@@ -226,11 +226,11 @@ public class DataRetriever {
             throw new RuntimeException(e);
         }
     }
+
     public Order saveOrder(Order orderToSave) {
         if (orderToSave.getTable() == null || orderToSave.getTable().getId() == null) {
             throw new RuntimeException("La table doit être spécifiée pour créer une commande");
         }
-
         if (orderToSave.getSeatingDatetime() == null) {
             throw new RuntimeException("La date d'installation doit être spécifiée");
         }
@@ -238,74 +238,64 @@ public class DataRetriever {
         try (Connection conn = DatabaseConnection.getDBConnection()) {
             conn.setAutoCommit(false);
 
-            if (!isTableAvailable(conn, orderToSave.getTable().getId(),
-                    orderToSave.getSeatingDatetime(), orderToSave.getLeavingDatetime())) {
+            Integer tableId = orderToSave.getTable().getId();
+            Instant seating = orderToSave.getSeatingDatetime();
+            Instant leaving = orderToSave.getLeavingDatetime();
 
-                List<Integer> availableTables = getAvailableTables(conn,
-                        orderToSave.getSeatingDatetime(), orderToSave.getLeavingDatetime());
+            if (!isTableAvailable(conn, tableId, seating, leaving)) {
+                List<Integer> availableTableIds = getAvailableTables(conn, seating, leaving);
 
-                if (availableTables.isEmpty()) {
+                if (availableTableIds.isEmpty()) {
                     throw new RuntimeException("Aucune table n'est disponible pour cette période");
                 } else {
-                    String availableTableNumbers = availableTables.stream()
-                            .map(String::valueOf)
-                            .collect(Collectors.joining(", "));
+                    List<String> availableTableNumbers = new ArrayList<>();
+                    for (Integer id : availableTableIds) {
+                        RestaurantTable t = findTableById(conn, id);
+                        if (t != null) {
+                            availableTableNumbers.add(String.valueOf(t.getTableNumber()));
+                        }
+                    }
+
+                    String availableTablesStr = String.join(", ", availableTableNumbers);
                     throw new RuntimeException(
                             "La table " + orderToSave.getTable().getTableNumber() +
-                                    " n'est pas disponible. Tables disponibles : " + availableTableNumbers
+                                    " n'est pas disponible. Tables disponibles : " + availableTablesStr
                     );
                 }
             }
 
-            for (DishOrder item : orderToSave.getDishOrders()) {
-                Dish dish = findDishById(item.getDish().getId());
-                if (dish == null) {
-                    throw new RuntimeException("Dish not found: " + item.getDish().getId());
-                }
-
-                for (DishIngredient ing : dish.getIngredients()) {
-                    Ingredient ingredient = findIngredientById(ing.getIngredient().getId());
-                    if (ingredient == null) {
-                        throw new RuntimeException("Ingredient not found: " + ing.getIngredient().getId());
-                    }
-
-                    double currentQty = getStockValueAt(ingredient, Instant.now()).getQuantity();
-                    double requiredQty = ing.getQuantityRequired() * item.getQuantity();
-
-                    if (currentQty < requiredQty) {
-                        throw new RuntimeException("Insufficient stock for ingredient: " + ingredient.getName());
-                    }
-                }
-            }
-
             String orderSql = """
-                INSERT INTO "order" (reference, creation_datetime, id_table, seating_datetime, leaving_datetime) 
-                VALUES (?, ?, ?, ?, ?) 
-                RETURNING id
-                """;
+            INSERT INTO "order" (reference, creation_datetime, id_table, seating_datetime, leaving_datetime) 
+            VALUES (?, ?, ?, ?, ?) 
+            RETURNING id
+            """;
 
+            Integer orderId;
             try (PreparedStatement pstmt = conn.prepareStatement(orderSql)) {
                 pstmt.setString(1, orderToSave.getReference());
                 pstmt.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
-                pstmt.setInt(3, orderToSave.getTable().getId());
-                pstmt.setTimestamp(4, Timestamp.from(orderToSave.getSeatingDatetime()));
+                pstmt.setInt(3, tableId);
+                pstmt.setTimestamp(4, Timestamp.from(seating));
 
-                if (orderToSave.getLeavingDatetime() != null) {
-                    pstmt.setTimestamp(5, Timestamp.from(orderToSave.getLeavingDatetime()));
+                if (leaving != null) {
+                    pstmt.setTimestamp(5, Timestamp.from(leaving));
                 } else {
                     pstmt.setNull(5, Types.TIMESTAMP);
                 }
 
                 ResultSet rs = pstmt.executeQuery();
                 if (rs.next()) {
-                    orderToSave.setId(rs.getInt(1));
+                    orderId = rs.getInt(1);
+                    orderToSave.setId(orderId);
+                } else {
+                    throw new RuntimeException("Échec de l'insertion de la commande");
                 }
             }
 
             String dishOrderSql = "INSERT INTO dish_order (id_order, id_dish, quantity) VALUES (?, ?, ?)";
             try (PreparedStatement pstmt = conn.prepareStatement(dishOrderSql)) {
                 for (DishOrder dishOrder : orderToSave.getDishOrders()) {
-                    pstmt.setInt(1, orderToSave.getId());
+                    pstmt.setInt(1, orderId);
                     pstmt.setInt(2, dishOrder.getDish().getId());
                     pstmt.setInt(3, dishOrder.getQuantity());
                     pstmt.addBatch();
@@ -321,16 +311,29 @@ public class DataRetriever {
         }
     }
 
-    private boolean isTableAvailable(Connection conn, Integer tableId, Instant seatingTime, Instant leavingTime) throws SQLException {
+    private RestaurantTable findTableById(Connection conn, Integer tableId) throws SQLException {
+        String sql = "SELECT id, table_number FROM restaurant_table WHERE id = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, tableId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return new RestaurantTable(rs.getInt("id"), rs.getInt("table_number"));
+            }
+            return null;
+        }
+    }
+
+    private boolean isTableAvailable(Connection conn, Integer tableId,
+                                     Instant seatingTime, Instant leavingTime) throws SQLException {
         String sql = """
-            SELECT COUNT(*) FROM "order" o 
-            WHERE o.id_table = ? 
-            AND (
-                (o.seating_datetime <= ? AND (o.leaving_datetime IS NULL OR o.leaving_datetime >= ?))
-                OR (o.seating_datetime <= ? AND ? <= o.leaving_datetime)
-                OR (? <= o.seating_datetime AND o.seating_datetime <= ?)
-            )
-            """;
+        SELECT COUNT(*) FROM "order" o 
+        WHERE o.id_table = ? 
+        AND (
+            (o.seating_datetime <= ? AND (o.leaving_datetime IS NULL OR o.leaving_datetime >= ?))
+            OR (o.seating_datetime <= ? AND ? <= o.leaving_datetime)
+            OR (? <= o.seating_datetime AND o.seating_datetime <= ?)
+        )
+        """;
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, tableId);
@@ -344,14 +347,12 @@ public class DataRetriever {
             pstmt.setTimestamp(7, Timestamp.from(effectiveLeavingTime));
 
             ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt(1) == 0;
-            }
-            return true;
+            return rs.next() && rs.getInt(1) == 0;
         }
     }
 
-    private List<Integer> getAvailableTables(Connection conn, Instant seatingTime, Instant leavingTime) throws SQLException {
+    private List<Integer> getAvailableTables(Connection conn,
+                                             Instant seatingTime, Instant leavingTime) throws SQLException {
         String allTablesSql = "SELECT id FROM restaurant_table ORDER BY table_number";
         List<Integer> allTables = new ArrayList<>();
 

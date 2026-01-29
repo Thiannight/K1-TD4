@@ -13,25 +13,10 @@ public class Order {
     private Instant seatingDatetime;
     private Instant leavingDatetime;
 
-    public Double getTotalAmountWithoutVAT() {
-        return dishOrders.stream()
-                .mapToDouble(do_ -> {
-                    Dish dish = do_.getDish();
-                    return (dish != null && dish.getPrice() != null)
-                            ? dish.getPrice() * do_.getQuantity()
-                            : 0.0;
-                })
-                .sum();
-    }
-
-    public Double getTotalAmountWithVAT() {
-        return getTotalAmountWithoutVAT() * 1.2;
-    }
-
+    // Getters et setters
     public Integer getId() {
         return id;
     }
-
     public void setId(Integer id) {
         this.id = id;
     }
@@ -39,7 +24,6 @@ public class Order {
     public String getReference() {
         return reference;
     }
-
     public void setReference(String reference) {
         this.reference = reference;
     }
@@ -47,7 +31,6 @@ public class Order {
     public Instant getCreationDatetime() {
         return creationDatetime;
     }
-
     public void setCreationDatetime(Instant creationDatetime) {
         this.creationDatetime = creationDatetime;
     }
@@ -55,7 +38,6 @@ public class Order {
     public List<DishOrder> getDishOrders() {
         return dishOrders;
     }
-
     public void setDishOrders(List<DishOrder> dishOrders) {
         this.dishOrders = dishOrders;
     }
@@ -63,7 +45,6 @@ public class Order {
     public RestaurantTable getTable() {
         return table;
     }
-
     public void setTable(RestaurantTable table) {
         this.table = table;
     }
@@ -71,7 +52,6 @@ public class Order {
     public Instant getSeatingDatetime() {
         return seatingDatetime;
     }
-
     public void setSeatingDatetime(Instant seatingDatetime) {
         this.seatingDatetime = seatingDatetime;
     }
@@ -79,9 +59,22 @@ public class Order {
     public Instant getLeavingDatetime() {
         return leavingDatetime;
     }
+    public void setLeavingDatetime(Instant leavingDatetime) { this.leavingDatetime = leavingDatetime; }
 
-    public void setLeavingDatetime(Instant leavingDatetime) {
-        this.leavingDatetime = leavingDatetime;
+    public Double getTotalAmountWithoutVat() {
+        return dishOrders.stream()
+                .mapToDouble(item -> {
+                    Dish dish = item.getDish();
+                    return (dish != null && dish.getPrice() != null)
+                            ? dish.getPrice() * item.getQuantity()
+                            : 0.0;
+                })
+                .sum();
+    }
+
+    public Double getTotalAmountWithVat() {
+        Double total = getTotalAmountWithoutVat();
+        return total != null ? total * 1.20 : null;
     }
 
     @Override
@@ -89,11 +82,10 @@ public class Order {
         return "Order{" +
                 "id=" + id +
                 ", reference='" + reference + '\'' +
-                ", creationDatetime=" + creationDatetime +
                 ", table=" + (table != null ? table.getTableNumber() : "null") +
-                ", seatingDatetime=" + seatingDatetime +
-                ", leavingDatetime=" + leavingDatetime +
-                ", dishOrders=" + dishOrders.size() +
+                ", seating=" + seatingDatetime +
+                ", leaving=" + leavingDatetime +
+                ", dishCount=" + dishOrders.size() +
                 '}';
     }
 }
