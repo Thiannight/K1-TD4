@@ -9,7 +9,7 @@ DROP TYPE IF EXISTS dish_type CASCADE;
 
 CREATE TYPE category_type AS ENUM ('VEGETABLE', 'ANIMAL', 'MARINE', 'DAIRY', 'OTHER');
 CREATE TYPE dish_type AS ENUM ('START', 'MAIN', 'DESSERT');
-create TYPE movement_type AS ENUM ('IN', 'OUT');
+CREATE TYPE movement_type AS ENUM ('IN', 'OUT');
 
 CREATE TABLE ingredient (
     id SERIAL PRIMARY KEY,
@@ -55,3 +55,13 @@ CREATE TABLE stock_movement (
     type movement_type NOT NULL,
     creation_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE restaurant_table (
+                                  id SERIAL PRIMARY KEY,
+                                  table_number INTEGER NOT NULL UNIQUE
+);
+
+ALTER TABLE "order"
+    ADD COLUMN id_table INTEGER REFERENCES restaurant_table(id),
+    ADD COLUMN seating_datetime TIMESTAMP,
+    ADD COLUMN leaving_datetime TIMESTAMP;

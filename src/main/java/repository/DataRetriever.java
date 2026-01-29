@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class DataRetriever {
     private final StockService stockService = new StockService();
@@ -173,47 +174,7 @@ public class DataRetriever {
         }
     }
 
-    public Order saveOrder(Order orderToSave) {
-        try (Connection conn = DatabaseConnection.getDBConnection()) {
-            conn.setAutoCommit(false);
 
-            // 1. Stock Verification
-            for (DishOrder item : orderToSave.getDishOrders()) {
-                Dish dish = findDishById(item.getDish().getId());
-                if (dish == null) {
-                    throw new RuntimeException("Dish not found: " + item.getDish().getId());
-                }
-
-                for (DishIngredient ing : dish.getIngredients()) {
-                    Ingredient ingredient = findIngredientById(ing.getIngredient().getId());
-                    if (ingredient == null) {
-                        throw new RuntimeException("Ingredient not found: " + ing.getIngredient().getId());
-                    }
-
-                    double currentQty = stockService.getStockValueAt(ingredient, Instant.now()).getQuantity();
-                    double requiredQty = ing.getQuantityRequired() * item.getQuantity();
-
-                    if (currentQty < requiredQty) {
-                        throw new RuntimeException("Insufficient stock for ingredient: " + ingredient.getName());
-                    }
-                }
-            }
-
-            // 2. Save Order
-            PreparedStatement stmt = conn.prepareStatement(
-                    "INSERT INTO \"order\" (reference, creation_datetime) VALUES (?, ?) RETURNING id"
-            );
-            stmt.setString(1, orderToSave.getReference());
-            stmt.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) orderToSave.setId(rs.getInt(1));
-
-            conn.commit();
-            return orderToSave;
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
-        }
-    }
 
     public Dish findDishById(Integer id) {
         if (id == null) return null;
@@ -264,5 +225,182 @@ public class DataRetriever {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+    public Order saveOrder(Order orderToSave) {
+        if (orderToSave.getTable() == null || orderToSave.getTable().getId() == null) {
+            throw new RuntimeException("La table doit être spécifiée pour créer une commande");
+        }
+
+        if (orderToSave.getSeatingDatetime() == null) {
+            throw new RuntimeException("La date d'installation doit être spécifiée");
+        }
+
+        try (Connection conn = DatabaseConnection.getDBConnection()) {
+            conn.setAutoCommit(false);
+
+            if (!isTableAvailable(conn, orderToSave.getTable().getId(),
+                    orderToSave.getSeatingDatetime(), orderToSave.getLeavingDatetime())) {
+
+                List<Integer> availableTables = getAvailableTables(conn,
+                        orderToSave.getSeatingDatetime(), orderToSave.getLeavingDatetime());
+
+                if (availableTables.isEmpty()) {
+                    throw new RuntimeException("Aucune table n'est disponible pour cette période");
+                } else {
+                    String availableTableNumbers = availableTables.stream()
+                            .map(String::valueOf)
+                            .collect(Collectors.joining(", "));
+                    throw new RuntimeException(
+                            "La table " + orderToSave.getTable().getTableNumber() +
+                                    " n'est pas disponible. Tables disponibles : " + availableTableNumbers
+                    );
+                }
+            }
+
+            for (DishOrder item : orderToSave.getDishOrders()) {
+                Dish dish = findDishById(item.getDish().getId());
+                if (dish == null) {
+                    throw new RuntimeException("Dish not found: " + item.getDish().getId());
+                }
+
+                for (DishIngredient ing : dish.getIngredients()) {
+                    Ingredient ingredient = findIngredientById(ing.getIngredient().getId());
+                    if (ingredient == null) {
+                        throw new RuntimeException("Ingredient not found: " + ing.getIngredient().getId());
+                    }
+
+                    double currentQty = getStockValueAt(ingredient, Instant.now()).getQuantity();
+                    double requiredQty = ing.getQuantityRequired() * item.getQuantity();
+
+                    if (currentQty < requiredQty) {
+                        throw new RuntimeException("Insufficient stock for ingredient: " + ingredient.getName());
+                    }
+                }
+            }
+
+            String orderSql = """
+                INSERT INTO "order" (reference, creation_datetime, id_table, seating_datetime, leaving_datetime) 
+                VALUES (?, ?, ?, ?, ?) 
+                RETURNING id
+                """;
+
+            try (PreparedStatement pstmt = conn.prepareStatement(orderSql)) {
+                pstmt.setString(1, orderToSave.getReference());
+                pstmt.setTimestamp(2, Timestamp.from(orderToSave.getCreationDatetime()));
+                pstmt.setInt(3, orderToSave.getTable().getId());
+                pstmt.setTimestamp(4, Timestamp.from(orderToSave.getSeatingDatetime()));
+
+                if (orderToSave.getLeavingDatetime() != null) {
+                    pstmt.setTimestamp(5, Timestamp.from(orderToSave.getLeavingDatetime()));
+                } else {
+                    pstmt.setNull(5, Types.TIMESTAMP);
+                }
+
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    orderToSave.setId(rs.getInt(1));
+                }
+            }
+
+            String dishOrderSql = "INSERT INTO dish_order (id_order, id_dish, quantity) VALUES (?, ?, ?)";
+            try (PreparedStatement pstmt = conn.prepareStatement(dishOrderSql)) {
+                for (DishOrder dishOrder : orderToSave.getDishOrders()) {
+                    pstmt.setInt(1, orderToSave.getId());
+                    pstmt.setInt(2, dishOrder.getDish().getId());
+                    pstmt.setInt(3, dishOrder.getQuantity());
+                    pstmt.addBatch();
+                }
+                pstmt.executeBatch();
+            }
+
+            conn.commit();
+            return orderToSave;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la sauvegarde de la commande: " + e.getMessage(), e);
+        }
+    }
+
+    private boolean isTableAvailable(Connection conn, Integer tableId, Instant seatingTime, Instant leavingTime) throws SQLException {
+        String sql = """
+            SELECT COUNT(*) FROM "order" o 
+            WHERE o.id_table = ? 
+            AND (
+                (o.seating_datetime <= ? AND (o.leaving_datetime IS NULL OR o.leaving_datetime >= ?))
+                OR (o.seating_datetime <= ? AND ? <= o.leaving_datetime)
+                OR (? <= o.seating_datetime AND o.seating_datetime <= ?)
+            )
+            """;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, tableId);
+            Instant effectiveLeavingTime = leavingTime != null ? leavingTime : Instant.now();
+
+            pstmt.setTimestamp(2, Timestamp.from(seatingTime));
+            pstmt.setTimestamp(3, Timestamp.from(effectiveLeavingTime));
+            pstmt.setTimestamp(4, Timestamp.from(seatingTime));
+            pstmt.setTimestamp(5, Timestamp.from(effectiveLeavingTime));
+            pstmt.setTimestamp(6, Timestamp.from(seatingTime));
+            pstmt.setTimestamp(7, Timestamp.from(effectiveLeavingTime));
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) == 0;
+            }
+            return true;
+        }
+    }
+
+    private List<Integer> getAvailableTables(Connection conn, Instant seatingTime, Instant leavingTime) throws SQLException {
+        String allTablesSql = "SELECT id FROM restaurant_table ORDER BY table_number";
+        List<Integer> allTables = new ArrayList<>();
+
+        try (PreparedStatement pstmt = conn.prepareStatement(allTablesSql)) {
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                allTables.add(rs.getInt("id"));
+            }
+        }
+
+        List<Integer> availableTables = new ArrayList<>();
+        for (Integer tableId : allTables) {
+            if (isTableAvailable(conn, tableId, seatingTime, leavingTime)) {
+                availableTables.add(tableId);
+            }
+        }
+
+        return availableTables;
+    }
+
+    public RestaurantTable findTableByNumber(Integer tableNumber) {
+        String sql = "SELECT id, table_number FROM restaurant_table WHERE table_number = ?";
+
+        try (Connection conn = DatabaseConnection.getDBConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, tableNumber);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return new RestaurantTable(
+                        rs.getInt("id"),
+                        rs.getInt("table_number")
+                );
+            }
+            return null;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la recherche de la table: " + e.getMessage(), e);
+        }
+    }
+
+    private Stock getStockValueAt(Ingredient ingredient, Instant t) {
+        double total = 0;
+        for (StockMovement sm : ingredient.getStockMovementList()) {
+            if (!sm.getMovementDatetime().isAfter(t)) {
+                total += sm.getQuantity();
+            }
+        }
+        return new Stock(total, Unit.KG);
     }
 }

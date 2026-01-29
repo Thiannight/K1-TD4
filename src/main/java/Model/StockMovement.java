@@ -7,7 +7,7 @@ public class StockMovement {
     private final double quantity;
     private final Unit unit;
     private final Instant movementDatetime;
-    private final MovementTypeEnum type;
+    private final MovementTypeEnum type; // Ajout du type
 
     public StockMovement(int id, double quantity, Unit unit, Instant movementDatetime, MovementTypeEnum type) {
         this.id = id;
@@ -20,16 +20,16 @@ public class StockMovement {
     public int getId() {
         return id;
     }
-
     public double getQuantity() {
         return quantity;
     }
-
     public Unit getUnit() {
         return unit;
     }
-
     public Instant getMovementDatetime() {
         return movementDatetime;
+    }
+    public MovementTypeEnum getType() {
+        return type;
     }
 }

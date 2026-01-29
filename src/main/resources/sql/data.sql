@@ -37,3 +37,10 @@ SELECT setval('dish_id_seq', COALESCE((SELECT MAX(id) FROM dish), 1));
 SELECT setval('dish_ingredient_id_seq', COALESCE((SELECT MAX(id) FROM dish_ingredient), 1));
 SELECT setval('order_id_seq', COALESCE((SELECT MAX(id) FROM "order"), 1));
 SELECT setval('dish_order_id_seq', COALESCE((SELECT MAX(id) FROM dish_order), 1));
+
+INSERT INTO restaurant_table (id, table_number) VALUES
+    (1, 1),
+    (2, 2),
+    (3, 3);
+
+SELECT setval('restaurant_table_id_seq', COALESCE((SELECT MAX(id) FROM restaurant_table), 1));
