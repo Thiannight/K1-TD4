@@ -52,13 +52,14 @@ CREATE TABLE stock_movement (
     creation_datetime TIMESTAMP WITHOUT TIME ZONE
 );
 
-CREATE TABLE "order" (
-    id SERIAL PRIMARY KEY,
-    reference VARCHAR(255),
+CREATE TABLE "order"(
+    id                SERIAL PRIMARY KEY,
+    reference         VARCHAR(255),
     creation_datetime TIMESTAMP WITHOUT TIME ZONE,
-    id_table INTEGER REFERENCES restaurant_table(id),
-    seating_datetime TIMESTAMP WITHOUT TIME ZONE,
-    leaving_datetime TIMESTAMP WITHOUT TIME ZONE
+    id_table          INTEGER REFERENCES restaurant_table (id),
+    seating_datetime  TIMESTAMP WITHOUT TIME ZONE,
+    leaving_datetime  TIMESTAMP WITHOUT TIME ZONE
+);
 
 CREATE TABLE dish_order (
     id SERIAL PRIMARY KEY,
