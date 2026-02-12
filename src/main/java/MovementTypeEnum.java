@@ -1,5 +1,4 @@
-package Model;
-
 public enum MovementTypeEnum {
-    IN, OUT
+    IN,
+    OUT
 }
